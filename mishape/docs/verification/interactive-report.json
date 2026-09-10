@@ -1,0 +1,6 @@
+{
+  "continuous_stream_intermediate_delta_mm": 120.0,
+  "final_delta_mm": 280,
+  "reload_restored": true,
+  "page_errors": []
+}

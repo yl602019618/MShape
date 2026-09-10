@@ -1,0 +1,28 @@
+{
+  "product": "MiShape",
+  "version": "0.1.0",
+  "python_tests": {
+    "passed": 64,
+    "command": ".venv/bin/python -m pytest mishape/tests -q",
+    "seconds": 21.18
+  },
+  "javascript_tests": {
+    "passed": 13,
+    "command": "node --experimental-default-type=module --test tests/test_generation_controls.mjs",
+    "real_generation_scenarios": 6
+  },
+  "browser_report": "browser-report.json",
+  "interactive_report": "interactive-report.json",
+  "roundtrip_report": "roundtrip-ui-report.json",
+  "python": "3.13.5",
+  "dependencies": {
+    "numpy": "2.4.6",
+    "numba": "0.65.1",
+    "scipy": "1.18.1",
+    "trimesh": "4.12.2",
+    "fastapi": "0.128.8",
+    "pydantic": "2.13.5",
+    "uvicorn": "0.52.4"
+  },
+  "scope": "Polygon styling, deterministic generation and export; not manufacturing certification"
+}

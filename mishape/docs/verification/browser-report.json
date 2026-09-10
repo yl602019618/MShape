@@ -1,0 +1,26 @@
+{
+  "checks": [
+    "Two real asset cards, 930 loaded, 84 point cage",
+    "Length slider changes actual mesh dimensions, rigid wheel check true",
+    "Small-step undo and redo restore exact dimensions",
+    "Original/design side-by-side with camera presets",
+    "Numeric cage point edits trigger mesh deformation",
+    "Shift drag of a projected cage handle edits control recipe",
+    "Wire/displacement, component selection, isolation and exploded view",
+    "Project JSON download/import replays parameters and control edits",
+    "Known-length scale calibration establishes a measured new baseline",
+    "12 actual variants, thumbnail portfolio, downloadable OBJ+recipe ZIP verified",
+    "Apply portfolio variant for continued editing",
+    "Parametric generator switches body style and regenerates actual 5.1m vehicle",
+    "Generated vehicle transfers to cage editor and exports valid GLB"
+  ],
+  "count": 13,
+  "page_errors": [],
+  "webgl_error": 0,
+  "timings": {
+    "slider_end_to_end_seconds": 0.41
+  },
+  "browser": "Local Chrome, headless, software WebGL2",
+  "batch_id": "6cb0631adceb4aaeacfe20cd0819d263",
+  "batch_count": 12
+}

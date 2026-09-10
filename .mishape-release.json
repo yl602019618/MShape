@@ -1,0 +1,7 @@
+{
+  "directory": "MiShape-v0.1.0",
+  "managed_by": "mishape/scripts/build_release.py",
+  "product": "MiShape",
+  "schema": "mishape-managed-release-v1",
+  "version": "0.1.0"
+}

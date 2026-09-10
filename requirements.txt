@@ -1,0 +1,11 @@
+# MiShape local runtime; Blender/bpy are only needed for optional asset conversion.
+numpy>=2.0,<3
+numba>=0.61,<0.66
+scipy>=1.13,<2
+trimesh>=4.11,<5
+networkx>=3,<4
+fastapi>=0.128,<0.129
+pydantic>=2.12,<3
+uvicorn>=0.34,<1
+python-multipart>=0.0.22,<0.1
+Pillow>=10,<13

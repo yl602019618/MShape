@@ -1,0 +1,290 @@
+{
+  "request": {
+    "body_style": "suv",
+    "parameters": {
+      "width": 2.01,
+      "height": 1.74,
+      "wheelbase": 2.91,
+      "ride_height": 0.26,
+      "track": 1.77,
+      "wheel_radius": 0.399,
+      "tyre_width": 0.25,
+      "cabin_length": 2.301,
+      "windscreen_angle": 51.0,
+      "backlight_angle": 70.0,
+      "roof_crown": 0.045,
+      "roof_rear_drop": 0.025,
+      "greenhouse_taper": 2.0,
+      "hood_height": 1.12,
+      "hood_crown": 0.015,
+      "front_taper": 0.025,
+      "decklid_height": 1.16,
+      "decklid_length": 0.0,
+      "rear_taper": 0.025,
+      "rear_shoulder": 0.0,
+      "tailgate_angle": 84.0,
+      "tailgate_lower_height": 0.91,
+      "rear_belt_height": 1.065,
+      "diffuser_angle": 9.0,
+      "diffuser_length": 0.55,
+      "diffuser_width": 1.34,
+      "length": 5.1,
+      "front_overhang_ratio": 0.49189189189189186,
+      "mirror_style": "touring",
+      "spoiler_style": "none",
+      "front_style": "upright",
+      "diffuser_style": "smooth"
+    }
+  },
+  "measurements": {
+    "wheelbase_m": 2.91,
+    "front_overhang_m": 1.0772432432432426,
+    "rear_overhang_m": 1.1127567567567564,
+    "actual_length_m": 5.1,
+    "actual_width_including_mirrors_m": 2.4708734444479448,
+    "actual_height_m": 1.73999099184698,
+    "windshield_centreline_angle_deg": 50.9976173422996,
+    "rear_glass_centreline_angle_deg": 69.99999999999999,
+    "roof_crown_control_m": 0.057499999999999885,
+    "angle_measurement": "two actual mesh vertices nearest authored centreline boundary landmarks",
+    "landmark_reference_residual_max_m": 0.008889692584924867,
+    "control_landmarks_m": [
+      [
+        -0.4107699406225549,
+        0.0,
+        1.120048888888889
+      ],
+      [
+        0.05485587846457429,
+        0.0,
+        1.695
+      ],
+      [
+        1.2053558784645744,
+        0.0,
+        1.74
+      ],
+      [
+        2.3558558784645744,
+        0.0,
+        1.6700000000000002
+      ],
+      [
+        2.541480697940338,
+        0.0,
+        1.16
+      ]
+    ],
+    "actual_landmarks_m": [
+      [
+        -0.4107699406225549,
+        0.0,
+        1.120048888888889
+      ],
+      [
+        0.05485587846457429,
+        0.0,
+        1.695
+      ],
+      [
+        1.19000863436885,
+        0.0,
+        1.73999099184698
+      ],
+      [
+        2.3558558784645744,
+        0.0,
+        1.6700000000000002
+      ],
+      [
+        2.541480697940338,
+        0.0,
+        1.16
+      ]
+    ],
+    "landmark_vertex_ids": [
+      27985,
+      34901,
+      40641,
+      46083,
+      61283
+    ],
+    "rear_deck_control_length_m": 0.0,
+    "tailgate_control_angle_deg": 84.0,
+    "tailgate_centreline_angle_deg": 84.0,
+    "tailgate_actual_landmarks_m": [
+      [
+        2.541480697940338,
+        0.0,
+        1.16
+      ],
+      [
+        2.5670502427229316,
+        0.0,
+        0.916722032009838
+      ]
+    ],
+    "tailgate_landmark_reference_residual_max_m": 0.03209881349500667,
+    "roof_rear_drop_control_m": 0.025,
+    "rear_architecture": "closed_tailgate",
+    "tailgate_control_landmarks_m": [
+      [
+        2.541480697940338,
+        0.0,
+        1.16
+      ],
+      [
+        2.567756756756757,
+        0.0,
+        0.91
+      ]
+    ],
+    "rear_profile_control_landmarks_m": [
+      [
+        -2.5322432432432427,
+        0.0,
+        0.7862510685469671
+      ],
+      [
+        -0.4107699406225549,
+        0.0,
+        1.12
+      ],
+      [
+        0.05485587846457429,
+        0.0,
+        1.695
+      ],
+      [
+        1.2053558784645744,
+        0.0,
+        1.74
+      ],
+      [
+        2.3558558784645744,
+        0.0,
+        1.6700000000000002
+      ],
+      [
+        2.541480697940338,
+        0.0,
+        1.16
+      ],
+      [
+        2.5546187273485472,
+        0.0,
+        1.035
+      ],
+      [
+        2.567756756756757,
+        0.0,
+        0.91
+      ]
+    ],
+    "rear_deck_measurement": "analytic profile control length; zero reuses the entire authored deck as descending tailgate",
+    "body_width_excluding_mirrors_m": 2.0219321103151193,
+    "wheel_radius_m": 0.399,
+    "track_m": 1.77,
+    "floor_control_height_m": 0.26,
+    "dimensions_m": {
+      "length": 5.1,
+      "width": 2.4708734444479448,
+      "height": 1.73999099184698
+    },
+    "width_definition": "dimensions_m.width includes mirrors; width parameter controls body scaffold"
+  },
+  "quality": {
+    "schema": "aeroshape.parametric-quality.v2",
+    "screen_pass": true,
+    "errors": [],
+    "baseline": "fixed_body_and_generator_revision_preset",
+    "generator_revision": "v6",
+    "limits": {
+      "symmetry_tolerance_m": 1e-08,
+      "min_triangle_area_ratio": 0.25,
+      "principal_stretch_min": 0.3,
+      "principal_stretch_max": 2.5,
+      "originally_smooth_dihedral_deg": 15.0,
+      "max_new_crease_deg": 20.0,
+      "p999_new_crease_deg": 10.0
+    },
+    "smoothness_penalty": 0.6406291086707785,
+    "self_intersections": "not_checked",
+    "component_clearance": "not_checked",
+    "cfd_ready": false,
+    "validation_level": "authored_parametric_surface_screen",
+    "topology": {
+      "driver_faces": 99072,
+      "driver_vertices": 49538,
+      "boundary_edges": 0,
+      "nonmanifold_edges": 0,
+      "nonmanifold_vertices": 0,
+      "driver_connected_components": 1,
+      "winding_consistent": true,
+      "closed_manifold_driver": true,
+      "vertex_identity_preserved": true,
+      "face_identity_preserved": true,
+      "component_face_membership_preserved": true,
+      "authored_parts_preserved": true,
+      "driver_follower_identity_preserved": true,
+      "components_present": 29,
+      "expected_components": 29,
+      "semantic_slots": 30
+    },
+    "windshield_profile": {
+      "pass": true,
+      "max_inward_sag_mm": 0.03259559617662354,
+      "limit_mm": 1.0,
+      "profiles": [
+        {
+          "lateral_fraction": 0.0,
+          "vertices": 21,
+          "inward_sag_mm": 0.0011336519925558147
+        },
+        {
+          "lateral_fraction": 0.64,
+          "vertices": 21,
+          "inward_sag_mm": 5.551115123125783e-14
+        },
+        {
+          "lateral_fraction": 0.77,
+          "vertices": 21,
+          "inward_sag_mm": 0.014781374577855014
+        },
+        {
+          "lateral_fraction": 0.8,
+          "vertices": 21,
+          "inward_sag_mm": 0.03259559617662354
+        }
+      ],
+      "scope": "glass centre, shoulder, shared A-pillar boundary and adjacent pillar longitudinal mesh profiles"
+    },
+    "symmetry": {
+      "max_m": 9.155133597044475e-16,
+      "tolerance_m": 1e-08,
+      "method": "authored_reflection_vertex_identity"
+    },
+    "min_area_ratio": 0.8502672941087629,
+    "driver_normal_reversal_faces": 0,
+    "surface_strain": {
+      "principal_min": 0.6603481282507173,
+      "principal_max": 1.6586255758921677,
+      "triangles_checked": 99072,
+      "scope": "all_driver_triangles"
+    },
+    "smooth_driver_crease": {
+      "adjacencies_checked": 145653,
+      "reference_dihedral_below_deg": 15.0,
+      "max_increase_deg": 8.320833272549663,
+      "p999_increase_deg": 6.799612000641735,
+      "rms_increase_deg": 0.36025023262114886,
+      "new_crease_edges": 0,
+      "method": "all_originally_smooth_driver_edge_dihedrals"
+    },
+    "production_ready": false,
+    "scope": "Concept polygon surface and authored component memberships",
+    "manufacturing_tolerances": "not_defined",
+    "class_a_surface": "not_certified"
+  },
+  "export_coordinate_system": "glTF Y-up"
+}
