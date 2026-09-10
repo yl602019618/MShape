@@ -1,0 +1,9 @@
+{
+  "runtime": "Browser Web Worker / Pyodide",
+  "default_fitted_nodes": 108,
+  "refined_nodes": 325,
+  "editable_boundary_nodes": 226,
+  "regrid_max_error_mm": 0,
+  "page_errors": [],
+  "elapsed_seconds": 7.78
+}

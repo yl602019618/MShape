@@ -268,7 +268,7 @@ export class StudioViewer extends Viewer {
 
   cagePoints() {
     if (!this.cage) return [];
-    if (this._cageData) return this._cageData.points;
+    if (this._cageData) return this._cageData.points.filter(point => point.visible !== false);
     return super.cagePoints();
   }
 

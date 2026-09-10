@@ -1,6 +1,7 @@
 """Real Chrome integration checks for MiShape's complete user workflow."""
 from pathlib import Path
 import json
+import os
 import time
 import zipfile
 from playwright.sync_api import sync_playwright
@@ -8,6 +9,7 @@ from playwright.sync_api import sync_playwright
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'docs' / 'verification'
 OUT.mkdir(parents=True, exist_ok=True)
+BASE_URL = os.environ.get('MISHAPE_TEST_URL', 'http://127.0.0.1:8010').rstrip('/')
 
 
 def main():
@@ -17,11 +19,13 @@ def main():
             args=['--enable-unsafe-swiftshader', '--use-angle=swiftshader'])
         page = browser.new_page(viewport={'width':1512,'height':982}, device_scale_factor=1, accept_downloads=True)
         page.on('pageerror', lambda e: errors.append(str(e)))
-        page.goto('http://127.0.0.1:8010')
+        page.goto(BASE_URL)
         page.wait_for_function('window.miShape?.model && document.getElementById("loading").classList.contains("hidden")',timeout=60000)
         assert page.evaluate('miShape.model.metadata.asset_id')=='porsche-930'
-        assert page.evaluate('miShape.cage.points.length')==84
-        checks.append('Two real asset cards, 930 loaded, 84 point cage')
+        assert page.evaluate('miShape.cage.points.length')==108
+        assert page.evaluate('miShape.options.cage.type')=='fitted'
+        assert page.evaluate('miShape.cage.points.filter(p=>p.visible!==false).length')==94
+        checks.append('Two real asset cards, 930 loaded, fitted cage with 94 editable / 108 binding nodes')
         page.locator('[data-asset="porsche-carrera-4s"]').click()
         page.wait_for_function('miShape.model.metadata.asset_id==="porsche-carrera-4s"',timeout=60000)
         page.wait_for_function('document.getElementById("loading").classList.contains("hidden")')

@@ -1,6 +1,6 @@
 {
   "checks": [
-    "Two real asset cards, 930 loaded, 84 point cage",
+    "Two real asset cards, 930 loaded, fitted cage with 94 editable / 108 binding nodes",
     "Length slider changes actual mesh dimensions, rigid wheel check true",
     "Small-step undo and redo restore exact dimensions",
     "Original/design side-by-side with camera presets",
@@ -18,9 +18,9 @@
   "page_errors": [],
   "webgl_error": 0,
   "timings": {
-    "slider_end_to_end_seconds": 0.41
+    "slider_end_to_end_seconds": 0.447
   },
   "browser": "Local Chrome, headless, software WebGL2",
-  "batch_id": "6cb0631adceb4aaeacfe20cd0819d263",
+  "batch_id": "9038c79375cd4aa880534d84829fe5e8",
   "batch_count": 12
 }

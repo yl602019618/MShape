@@ -1,19 +1,18 @@
 {
   "product": "MiShape",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "python_tests": {
-    "passed": 64,
+    "passed": 112,
     "command": ".venv/bin/python -m pytest mishape/tests -q",
-    "seconds": 21.18
+    "seconds": 36.78,
+    "warnings": "Existing Starlette/AnyIO deprecation warning"
   },
   "javascript_tests": {
     "passed": 13,
-    "command": "node --experimental-default-type=module --test tests/test_generation_controls.mjs",
+    "command": "PYTHON=.venv/bin/python node --experimental-default-type=module --test tests/test_generation_controls.mjs",
     "real_generation_scenarios": 6
   },
   "browser_report": "browser-report.json",
-  "interactive_report": "interactive-report.json",
-  "roundtrip_report": "roundtrip-ui-report.json",
   "python": "3.13.5",
   "dependencies": {
     "numpy": "2.4.6",
@@ -24,5 +23,23 @@
     "pydantic": "2.13.5",
     "uvicorn": "0.52.4"
   },
-  "scope": "Polygon styling, deterministic generation and export; not manufacturing certification"
+  "scope": "Polygon styling, deterministic generation and export; not manufacturing certification",
+  "cage_browser_report": "cage-browser-report.json",
+  "wasm_browser_report": "cage-wasm-browser-report.json",
+  "legacy_reports": [
+    "interactive-report.json",
+    "roundtrip-ui-report.json"
+  ],
+  "cage_notes": {
+    "default_dimensions": [
+      9,
+      3,
+      4
+    ],
+    "editable_boundary_points": 94,
+    "total_nodes": 108,
+    "maximum_nodes": 833,
+    "pure_parameter_density_change_max_error_mm": 0,
+    "manual_transfer": "Approximate; max/RMS error displayed and undo supported."
+  }
 }

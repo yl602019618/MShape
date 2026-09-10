@@ -1,8 +1,9 @@
 """Polygon-preserving vehicle design kernel.
 
 Canonical coordinates: metres, front=-X, left=+Y, up=+Z, ground=0.
-All edits are evaluated from the input (rest) model, never accumulated.  A
-7×3×4 tensor lattice interpolates displacement with local cubic support.
+All edits are evaluated from the input (rest) model, never accumulated. A
+configurable tensor lattice interpolates manual displacement with local
+cubic support in either box or fitted vehicle-section coordinates.
 This is a styling mesh workflow, not a Class-A or manufacturing validator.
 """
 from __future__ import annotations
@@ -18,6 +19,7 @@ import threading
 import numpy as np
 
 from .parameters import schema, validate_parameters
+from . import cage as cage_geometry
 
 _DIMS = (7, 3, 4)
 _CACHE: OrderedDict = OrderedDict()
@@ -243,11 +245,14 @@ def _measure(v, landmarks, wheels):
     return result
 
 
-def _key(v, f, labels, model, landmarks):
+def _key(v, f, labels, model, landmarks, cage_settings=None):
     h = sha256()
     for arr in (v, f, labels):
         h.update(arr.tobytes())
     h.update(json.dumps([model.get('parts', []), model.get('metadata', {}).get('landmarks', {}), model.get('metadata', {}).get('scale_status'), model.get('metadata', {}).get('reference_length_m'), landmarks], sort_keys=True, default=str).encode())
+    # Preserve legacy hashes for recipes without an explicit cage config.
+    if cage_settings != cage_geometry.settings():
+        h.update(json.dumps(cage_settings, sort_keys=True).encode())
     return h.hexdigest()
 
 
@@ -271,15 +276,20 @@ def _cubic_axis(t, size):
     return np.clip(indices, 0, size - 1), weights
 
 
-def _binding(points, lo, hi):
+def _binding(points, lo, hi, dims=_DIMS):
     t = (points - lo) / (hi - lo)
-    return [_cubic_axis(t[:, axis], n) for axis, n in enumerate(_DIMS)]
+    return [_cubic_axis(t[:, axis], n) for axis, n in enumerate(dims)]
 
 
-def _interpolate(binding, displacement):
+def _shape_binding(points, shape):
+    t = cage_geometry.coordinates(points, shape)
+    return [_cubic_axis(t[:, axis], n) for axis, n in enumerate(shape['dimensions'])]
+
+
+def _interpolate(binding, displacement, dims=_DIMS):
     n = len(binding[0][0])
     result = np.zeros((n, 3))
-    grid = displacement.reshape(*_DIMS, 3)
+    grid = displacement.reshape(*dims, 3)
     ix, wx = binding[0]; iy, wy = binding[1]; iz, wz = binding[2]
     for a in range(4):
         for b in range(4):
@@ -291,9 +301,10 @@ def _interpolate(binding, displacement):
     return result
 
 
-def _prepare(model, landmarks=None):
+def _prepare(model, landmarks=None, cage_settings=None):
     v, f, labels = _arrays(model)
-    key = _key(v, f, labels, model, landmarks)
+    config = cage_geometry.settings(cage_settings)
+    key = _key(v, f, labels, model, landmarks, config)
     with _LOCK:
         if key in _CACHE:
             _CACHE.move_to_end(key)
@@ -301,12 +312,14 @@ def _prepare(model, landmarks=None):
     wheels = _wheel_groups(v, f, labels, model.get('parts', []))
     analysis = _analysis(v, f, labels, model, wheels, landmarks)
     lo, hi = v.min(0), v.max(0)
-    grid = np.stack(np.meshgrid(*[np.linspace(lo[a], hi[a], count) for a, count in enumerate(_DIMS)], indexing='ij'), axis=-1).reshape(-1, 3)
+    shape = cage_geometry.build(v, f, labels, model.get('parts', []), wheels, config)
+    grid = shape['grid']
     lmkeys = list(analysis['landmarks'])
     lmarray = np.array([analysis['landmarks'][k] for k in lmkeys])
     prepared = dict(v=v.copy(), f=f, labels=labels, analysis=analysis, wheels=wheels, lo=lo, hi=hi, grid=grid,
-                    binding=_binding(v, lo, hi), landmark_keys=lmkeys, landmark_array=lmarray,
-                    landmark_binding=_binding(lmarray, lo, hi), key=key)
+                    shape=shape, dimensions=shape['dimensions'], cage_settings=config,
+                    binding=_shape_binding(v, shape), landmark_keys=lmkeys, landmark_array=lmarray,
+                    landmark_binding=_shape_binding(lmarray, shape), key=key)
     with _LOCK:
         _CACHE[key] = prepared
         while len(_CACHE) > 2:
@@ -385,8 +398,8 @@ def _driver_displacement(points, p, data, wheel_mode=False):
     return delta
 
 
-def _control_displacement(controls, symmetry):
-    result = np.zeros((np.prod(_DIMS), 3))
+def _control_displacement(controls, symmetry, dims=_DIMS):
+    result = np.zeros((np.prod(dims), 3))
     specified = {}
     for control in controls or []:
         try:
@@ -410,8 +423,8 @@ def _control_displacement(controls, symmetry):
         for node, d in specified.items():
             if node in visited:
                 continue
-            i, j, k = np.unravel_index(node, _DIMS)
-            partner = int(np.ravel_multi_index((i, _DIMS[1] - 1 - j, k), _DIMS))
+            i, j, k = np.unravel_index(node, dims)
+            partner = int(np.ravel_multi_index((i, dims[1] - 1 - j, k), dims))
             if partner == node:
                 result[node, 1] = 0
             else:
@@ -424,24 +437,34 @@ def _control_displacement(controls, symmetry):
 
 def _cage_json(data, displacement):
     points, edges = [], []
+    dims = data['dimensions']
     for node, (rest, moved) in enumerate(zip(data['grid'], data['grid'] + displacement)):
-        ijk = np.unravel_index(node, _DIMS)
-        mirror = int(np.ravel_multi_index((ijk[0], _DIMS[1] - 1 - ijk[1], ijk[2]), _DIMS))
-        points.append(dict(id=node, index=list(map(int, ijk)), rest=rest.tolist(), position=moved.tolist(), mirror_id=mirror))
+        ijk = np.unravel_index(node, dims)
+        mirror = int(np.ravel_multi_index((ijk[0], dims[1] - 1 - ijk[1], ijk[2]), dims))
+        boundary = any(index in (0, dims[axis] - 1) for axis, index in enumerate(ijk))
+        points.append(dict(id=node, index=list(map(int, ijk)), rest=rest.tolist(), position=moved.tolist(),
+                           mirror_id=mirror, boundary=boundary, visible=boundary))
         for axis in range(3):
-            if ijk[axis] + 1 < _DIMS[axis]:
+            # An edge belongs to the envelope only if one of its two fixed
+            # coordinates lies on a boundary face; internal struts stay hidden.
+            on_surface = any(ijk[b] in (0, dims[b] - 1) for b in range(3) if b != axis)
+            if ijk[axis] + 1 < dims[axis] and on_surface:
                 other = list(ijk); other[axis] += 1
-                edges.append([node, int(np.ravel_multi_index(tuple(other), _DIMS))])
-    return dict(dimensions=list(_DIMS), points=points, edges=edges, unit='m', method='local_cubic_displacement',
+                edges.append([node, int(np.ravel_multi_index(tuple(other), dims))])
+    return dict(dimensions=list(dims), points=points, edges=edges, unit='m', method=data['shape']['method'],
+                type=data['cage_settings']['type'], settings=deepcopy(data['cage_settings']),
+                diagnostics=deepcopy(data['shape']['diagnostics']),
+                visible_points=sum(p['visible'] for p in points), total_points=len(points),
+                parameter_evaluation='analytic_rest_space' if data['cage_settings']['type'] == 'fitted' else 'cubic_control_lattice',
                 coordinate_system='X length / Y width / Z up; front=-X', editable=True)
 
 
 def get_cage(model, parameters=None, controls=None, options=None):
     options = options or {}
     p = validate_parameters(parameters)
-    data = _prepare(model, options.get('landmarks'))
+    data = _prepare(model, options.get('landmarks'), options.get('cage'))
     d = _driver_displacement(data['grid'], p, data)
-    d += _control_displacement(controls, options.get('symmetry', True))
+    d += _control_displacement(controls, options.get('symmetry', True), data['dimensions'])
     return _cage_json(data, d)
 
 
@@ -480,33 +503,42 @@ def deform(model, parameters=None, controls=None, options=None):
     """Return a polygon model with identical indices/labels and evaluated geometry.
 
     Parameters are deltas in schema units. Controls are ``{id, delta:[m,m,m]}``.
-    ``options`` supports symmetry, preserve_wheels, and explicit landmarks.
+    ``options`` supports symmetry, preserve_wheels, landmarks and cage settings.
     Repeated calls with the same input are deterministic. Original vertices,
     polygons, labels, UVs, and any unrelated metadata remain untouched.
     """
     options = options or {}
     p = validate_parameters(parameters)
-    data = _prepare(model, options.get('landmarks'))
+    data = _prepare(model, options.get('landmarks'), options.get('cage'))
     preserve_wheels = bool(options.get('preserve_wheels', True))
-    manual = _control_displacement(controls, options.get('symmetry', True))
+    dims = data['dimensions']
+    fitted = data['cage_settings']['type'] == 'fitted'
+    manual = _control_displacement(controls, options.get('symmetry', True), dims)
     cage_displacement = _driver_displacement(data['grid'], p, data) + manual
     v = data['v']
     if not p and not np.any(manual):
         moved = v.copy()  # Exact identity; do not pass coordinates through arithmetic.
+    elif fitted:
+        # Analytical design fields keep exactly the same meaning at every
+        # cage density. Only manual edits are interpolated through the cage.
+        moved = v + _driver_displacement(v, p, data) + _interpolate(data['binding'], manual, dims)
     else:
-        moved = v + _interpolate(data['binding'], cage_displacement)
+        moved = v + _interpolate(data['binding'], cage_displacement, dims)
     rigid_errors = []
     wheel_moves = {}
     if preserve_wheels:
         for wheel in data['wheels']:
             center = wheel['center'][None, :]
             d = _driver_displacement(center, p, data, wheel_mode=True)[0]
-            d += _interpolate(_binding(center, data['lo'], data['hi']), manual)[0]
+            d += _interpolate(_shape_binding(center, data['shape']), manual, dims)[0]
             ids = wheel['indices']
             moved[ids] = v[ids] + d
             wheel_moves[wheel['name']] = d
             rigid_errors.append(float(np.max(np.linalg.norm((moved[ids] - moved[ids].mean(0)) - (v[ids] - v[ids].mean(0)), axis=1))))
-    lmarray = data['landmark_array'] + _interpolate(data['landmark_binding'], cage_displacement)
+    if fitted:
+        lmarray = data['landmark_array'] + _driver_displacement(data['landmark_array'], p, data) + _interpolate(data['landmark_binding'], manual, dims)
+    else:
+        lmarray = data['landmark_array'] + _interpolate(data['landmark_binding'], cage_displacement, dims)
     lm = {k: q.tolist() for k, q in zip(data['landmark_keys'], lmarray)}
     moved_wheels = []
     for wheel in data['wheels']:
@@ -539,11 +571,191 @@ def deform(model, parameters=None, controls=None, options=None):
     out['metadata']['landmarks'] = deepcopy(lm)
     out['metadata']['landmark_provenance'] = 'transformed_source_landmarks_and_geometric_estimates'
     out['metadata']['mishape'] = dict(version='1.0', parameters=p, controls=deepcopy(controls or []),
-                                     options=dict(symmetry=bool(options.get('symmetry', True)), preserve_wheels=preserve_wheels),
+                                     options=dict(symmetry=bool(options.get('symmetry', True)), preserve_wheels=preserve_wheels,
+                                                  cage=deepcopy(data['cage_settings']),
+                                                  **({'landmarks': deepcopy(options['landmarks'])} if options.get('landmarks') else {})),
                                      source_hash=data['key'], analysis=analysis, quality=quality,
                                      cage=_cage_json(data, cage_displacement),
                                      evaluation='rest_model_delta', certification='styling_geometry_only')
     return out
+
+
+def _field_at(data, parameters, manual, points, include_parameters=True):
+    binding = _shape_binding(points, data['shape'])
+    if not include_parameters:
+        return _interpolate(binding, manual, data['dimensions'])
+    if data['cage_settings']['type'] == 'fitted':
+        return _driver_displacement(points, parameters, data) + _interpolate(binding, manual, data['dimensions'])
+    displacement = _driver_displacement(data['grid'], parameters, data) + manual
+    return _interpolate(binding, displacement, data['dimensions'])
+
+
+def _binding_matrix(binding, dims):
+    """Sparse, local-support interpolation operator used only when regridding."""
+    from scipy.sparse import coo_matrix
+    count = len(binding[0][0])
+    rows, columns, values = [], [], []
+    ix, wx = binding[0]; iy, wy = binding[1]; iz, wz = binding[2]
+    row_ids = np.arange(count)
+    for a in range(4):
+        for b in range(4):
+            for c in range(4):
+                weights = wx[:, a] * wy[:, b] * wz[:, c]
+                use = np.abs(weights) > 1e-12
+                if np.any(use):
+                    rows.append(row_ids[use])
+                    columns.append(np.ravel_multi_index((ix[use, a], iy[use, b], iz[use, c]), dims))
+                    values.append(weights[use])
+    return coo_matrix((np.concatenate(values), (np.concatenate(rows), np.concatenate(columns))),
+                      shape=(count, int(np.prod(dims)))).tocsr()
+
+
+def regrid(model, parameters=None, controls=None, options=None, new_cage=None):
+    """Transfer an edited rest-space field to new cage settings without baking.
+
+    Design parameters remain in the recipe. Manual fields are first sampled on
+    the new lattice, then fitted against deterministic surface samples. A lower
+    density cannot in general represent the old field exactly: actual full-mesh
+    max/RMS errors are returned for review, never hidden as an exact transfer.
+    """
+    options = deepcopy(options or {})
+    p = validate_parameters(parameters)
+    old = _prepare(model, options.get('landmarks'), options.get('cage'))
+    config = cage_geometry.settings(new_cage)
+    new_options = deepcopy(options)
+    new_options['cage'] = config
+    new = _prepare(model, options.get('landmarks'), config)
+    symmetry = bool(options.get('symmetry', True))
+    manual = _control_displacement(controls, symmetry, old['dimensions'])
+    zeros = np.zeros_like(new['grid'])
+    refinement_passes = refinement_accepted = extra_samples = 0
+    initial_max_error_mm = 0.0
+    if config == old['cage_settings']:
+        transferred = manual.copy()
+        method = 'unchanged_lattice'
+    elif not np.any(manual) and (not p or old['cage_settings']['type'] == new['cage_settings']['type'] == 'fitted'):
+        transferred = zeros
+        method = 'density_independent_analytic_parameters'
+    else:
+        from scipy.sparse.linalg import lsmr
+
+        def target(points):
+            return _field_at(old, p, manual, points) - _field_at(new, p, zeros, points)
+
+        transferred = target(new['grid'])
+        sampled = transferred.copy()
+        sample_ids = np.arange(len(old['v']))
+        if options.get('preserve_wheels', True):
+            wheel_ids = np.concatenate([w['indices'] for w in old['wheels']]) if old['wheels'] else np.array([], int)
+            sample_ids = np.setdiff1d(sample_ids, wheel_ids)
+        all_body_ids = sample_ids.copy()
+        if len(sample_ids) > 4000:
+            sample_ids = sample_ids[np.linspace(0, len(sample_ids) - 1, 4000).astype(int)]
+        points = old['v'][sample_ids]
+        targets = target(points)
+        if symmetry:
+            mirrored = points * np.array([1, -1, 1])
+            points = np.vstack((points, mirrored))
+            targets = np.vstack((targets, target(mirrored)))
+        if options.get('preserve_wheels', True) and old['wheels']:
+            centers = np.array([w['center'] for w in old['wheels']])
+            points = np.vstack((points, np.repeat(centers, 12, axis=0)))
+            # Wheel drivers are identical in either cage. Preserve only the
+            # manual translation sampled at each wheel's rigid center.
+            wheel_targets = _field_at(old, p, manual, centers, include_parameters=False)
+            targets = np.vstack((targets, np.repeat(wheel_targets, 12, axis=0)))
+        operator = _binding_matrix(_shape_binding(points, new['shape']), new['dimensions'])
+        residual = targets - operator @ transferred
+        for axis in range(3):
+            correction = lsmr(operator, residual[:, axis], damp=.035, atol=1e-7, btol=1e-7, maxiter=140)[0]
+            transferred[:, axis] += correction
+
+        def symmetrize(coefficients):
+            if not symmetry:
+                return coefficients
+            grid = coefficients.reshape(*new['dimensions'], 3)
+            return ((grid + grid[:, ::-1] * np.array([1, -1, 1])) / 2).reshape(-1, 3)
+
+        transferred = symmetrize(transferred)
+        full_targets = target(old['v'])
+        centers = np.array([w['center'] for w in old['wheels']]).reshape(-1, 3)
+        center_binding = _shape_binding(centers, new['shape']) if len(centers) else None
+        center_targets = _field_at(old, p, manual, centers, include_parameters=False) if len(centers) else None
+
+        def residual_errors(coefficients):
+            errors = np.linalg.norm(full_targets - _interpolate(new['binding'], coefficients, new['dimensions']), axis=1)
+            if options.get('preserve_wheels', True) and len(centers):
+                wheel_error = np.linalg.norm(center_targets - _interpolate(center_binding, coefficients, new['dimensions']), axis=1)
+                for wheel, value in zip(old['wheels'], wheel_error):
+                    errors[wheel['indices']] = value
+            return errors
+
+        errors = residual_errors(transferred)
+        initial_max_error_mm = float(errors.max() * 1000)
+        row_weights = np.ones(len(points))
+        # Rare interior/trim vertices may be absent from a uniform 4k sample.
+        # Add the worst point in each small rest-coordinate cell, not a cluster
+        # of duplicate vertices from one dense part. Solve against the original
+        # sampled field as the regularization anchor and accept only a lower
+        # full-mesh maximum error, so refinement cannot trade one hidden spike
+        # for a larger spike elsewhere.
+        if errors.max() > .002:
+            uvw = np.clip(cage_geometry.coordinates(old['v'], new['shape']), 0, 1)
+            cell_dims = np.array(new['dimensions']) * 2
+            cells = np.minimum((uvw * cell_dims).astype(int), cell_dims - 1)
+            cell_ids = np.ravel_multi_index(cells.T, tuple(cell_dims))
+            for _ in range(3):
+                order = all_body_ids[np.argsort(errors[all_body_ids])[::-1]]
+                order = order[errors[order] > .0005]
+                if not len(order):
+                    break
+                _, first = np.unique(cell_ids[order], return_index=True)
+                extra_ids = order[np.sort(first)[:800]]
+                extra_points, extra_targets = old['v'][extra_ids], full_targets[extra_ids]
+                if symmetry:
+                    mirrored = extra_points * np.array([1, -1, 1])
+                    extra_points = np.vstack((extra_points, mirrored))
+                    extra_targets = np.vstack((extra_targets, target(mirrored)))
+                points = np.vstack((points, extra_points))
+                targets = np.vstack((targets, extra_targets))
+                refinement_passes += 1
+                extra_samples += len(extra_points)
+                row_weights = np.r_[row_weights, np.full(len(extra_points), 2.5)]
+                operator = _binding_matrix(_shape_binding(points, new['shape']), new['dimensions'])
+                operator = operator.multiply(row_weights[:, None]).tocsr()
+                residual = targets * row_weights[:, None] - operator @ sampled
+                candidate = sampled.copy()
+                for axis in range(3):
+                    candidate[:, axis] += lsmr(operator, residual[:, axis], damp=.2, atol=1e-7, btol=1e-7, maxiter=140)[0]
+                candidate = symmetrize(candidate)
+                candidate_errors = residual_errors(candidate)
+                if candidate_errors.max() < errors.max():
+                    transferred, errors = candidate, candidate_errors
+                    refinement_accepted += 1
+                if errors.max() < .002:
+                    break
+        method = 'sampled_field_with_surface_least_squares'
+    new_controls = [dict(id=int(node), delta=delta.tolist()) for node, delta in enumerate(transferred)
+                    if np.linalg.norm(delta) > 1e-10]
+    # Canonicalize mirrored pairs and validate the public displacement limit.
+    transferred = _control_displacement(new_controls, symmetry, new['dimensions'])
+    new_controls = [dict(id=int(node), delta=delta.tolist()) for node, delta in enumerate(transferred)
+                    if np.linalg.norm(delta) > 1e-10]
+    before = deform(model, p, controls, options)
+    after = deform(model, p, new_controls, new_options)
+    error = np.linalg.norm(np.asarray(before['vertices']).reshape(-1, 3) - np.asarray(after['vertices']).reshape(-1, 3), axis=1) * 1000
+    maximum, rms = float(error.max()), float(np.sqrt(np.mean(error ** 2)))
+    report = dict(method=method, previous_dimensions=list(old['dimensions']), dimensions=list(new['dimensions']),
+                  previous_settings=deepcopy(old['cage_settings']), settings=deepcopy(config),
+                  max_error_mm=round(maximum, 6), rms_error_mm=round(rms, 6),
+                  initial_max_error_mm=round(initial_max_error_mm, 6),
+                  refinement_passes=refinement_passes, refinement_accepted=refinement_accepted,
+                  extra_samples=extra_samples,
+                  parameters_preserved=True, evaluated_vertices=len(error),
+                  requires_review=maximum > 2, exact=maximum < 1e-6,
+                  warning=('降低密度或切换笼类型可能无法完全表达原有局部形变；请检查重采样误差。' if maximum > 2 else ''))
+    return dict(parameters=p, controls=new_controls, options=new_options,
+                cage=after['metadata']['mishape']['cage'], resampling=report)
 
 
 def sample_parameters(count=12, seed=42, ranges=None):

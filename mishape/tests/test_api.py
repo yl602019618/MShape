@@ -37,7 +37,8 @@ def opened(client):
 def test_health_and_bundled_asset_landmarks(client, opened):
     assert client.get('/api/health').json()['product'] == 'MiShape'
     assert len(client.get('/api/bootstrap').json()['parameters']) == 17
-    assert len(opened['cage']['points']) == 84
+    assert len(opened['cage']['points']) == 108
+    assert opened['cage']['type'] == 'fitted'
     assert len(opened['model']['polygons']) > 0
     assert opened['analysis']['landmarks']['front_axle'][0] < opened['analysis']['landmarks']['rear_axle'][0]
     assert len(opened['analysis']['wheels']) == 4
@@ -213,7 +214,9 @@ def test_known_length_calibration_preserves_current_shape_and_source(client, ope
     assert model['faces'] == source['faces']
     assert model['polygons'] == source['polygons']
     assert model['face_labels'] == source['face_labels']
-    assert calibrated['recipe'] is None
+    assert calibrated['recipe']['parameters'] == {}
+    assert calibrated['recipe']['controls'] == []
+    assert calibrated['recipe']['options']['cage']['type'] == 'fitted'
     identity = client.post(f"/api/models/{calibrated['model_id']}/deform", json={})
     assert identity.status_code == 200
     assert identity.json()['vertices'] == model['vertices']

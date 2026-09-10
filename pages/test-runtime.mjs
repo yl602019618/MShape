@@ -1,5 +1,6 @@
 import {loadPyodide} from '../_site/runtime/pyodide.mjs';
 import fs from 'node:fs';
+import assert from 'node:assert/strict';
 const dir=new URL('../_site/',import.meta.url);const py=await loadPyodide({indexURL:new URL('runtime/',dir).pathname});
 await py.loadPackage(['numpy','scipy','pydantic','pillow','fastapi']);
 for(const wheel of JSON.parse(fs.readFileSync(new URL('runtime-packages.json',dir),'utf8')))py.unpackArchive(new Uint8Array(fs.readFileSync(new URL('runtime/'+wheel,dir))),'zip',{extractDir:'/home/pyodide/packages'});
@@ -9,9 +10,41 @@ py.runPython(fs.readFileSync(new URL('bridge.py',dir),'utf8'));
 for(const name of ['porsche-930','porsche-carrera-4s']){const path='/home/pyodide/mishape/assets/'+name;py.FS.mkdirTree(path);py.FS.writeFile(path+'/viewport.json',fs.readFileSync(new URL('assets/'+name+'/viewport.json',dir)));}
 async function req(path,data){py.globals.set('_payload',JSON.stringify({path,data}));let value=JSON.parse(await py.runPythonAsync('request(_payload)'));if(value.status!==200)throw Error(JSON.stringify(value));return value.json||value;}
 console.time('open');const a=await req('/api/models/open',{asset_id:'porsche-930'});console.timeEnd('open');
-console.time('deform');const d=await req(`/api/models/${a.model_id}/deform`,{parameters:{vehicle_length:100}});console.timeEnd('deform');
-if(d.vertices.length!==a.model.vertices.length||!d.vertices.some((v,i)=>v!==a.model.vertices[i]))throw Error('Deformation failed');
-const exported=await req(`/api/models/${a.model_id}/export`,{format:'obj',parameters:{vehicle_length:100}});if(!exported.binary)throw Error('Export failed');
+assert.equal(a.cage.points.length,108,'Fresh assets use the fitted default cage');
+assert.equal(a.recipe.options.cage.type,'fitted');
+assert.deepEqual(a.recipe.options.cage.dimensions,[9,3,4]);
+const modelPath=`/api/models/${a.model_id}`;
+const recipe={...a.recipe,parameters:{vehicle_length:100},options:{...a.recipe.options,preserve_wheels:false}};
+console.time('deform');const d=await req(`${modelPath}/deform`,recipe);console.timeEnd('deform');
+assert.equal(d.vertices.length,a.model.vertices.length);
+assert.ok(d.vertices.some((v,i)=>v!==a.model.vertices[i]),'Fitted parameter deformation changes geometry');
+assert.equal(d.cage.points.length,108,'Preview preserves the fitted recipe');
+
+const handle=a.cage.points.find(p=>p.index[0]===4&&p.index[1]===1&&p.index[2]===3);
+assert.ok(handle,'The fitted roof control is available');
+const manualRecipe={...recipe,controls:[{id:handle.id,delta:[0,0,.06]}]};
+const manual=await req(`${modelPath}/deform`,manualRecipe);
+assert.ok(manual.vertices.some((v,i)=>Math.abs(v-d.vertices[i])>1e-8),'Manual controls deform fitted geometry');
+console.time('regrid');
+const refined=await req(`${modelPath}/cage`,{...manualRecipe,cage:{type:'fitted',dimensions:[13,5,5],padding_mm:30}});
+console.timeEnd('regrid');
+assert.equal(refined.cage.points.length,325,'Fine density has 13 × 5 × 5 controls');
+assert.deepEqual(refined.recipe.parameters,manualRecipe.parameters,'Density changes preserve parameters');
+assert.equal(refined.recipe.options.symmetry,true,'Density changes preserve symmetry');
+assert.equal(refined.recipe.options.preserve_wheels,false,'Density changes preserve wheel settings');
+assert.deepEqual(refined.recipe.options.cage.dimensions,[13,5,5]);
+assert.ok(refined.recipe.controls.length>0,'Density changes transfer manual offsets');
+for(const key of ['max_error_mm','rms_error_mm'])assert.ok(Number.isFinite(refined.regrid[key])&&refined.regrid[key]>=0,`Regrid reports finite ${key}`);
+assert.ok(refined.regrid.refinement_accepted>0,'WASM executes full-mesh residual refinement');
+assert.ok(refined.regrid.max_error_mm<4,'Rare-vertex peak error stays below 4 mm for this 60 mm roof edit');
+const replay=await req(`${modelPath}/deform`,refined.recipe);
+assert.deepEqual(replay.vertices,refined.vertices,'Transferred recipe replays exactly');
+assert.equal(replay.cage.points.length,325);
+
+const legacy=await req(`${modelPath}/deform`,{parameters:{vehicle_length:100}});
+assert.equal(legacy.cage.points.length,84,'Recipes without cage options retain the legacy lattice');
+const exported=await req(`${modelPath}/export`,{...refined.recipe,format:'obj'});if(!exported.binary)throw Error('Export failed');
 console.time('generate');const g=await req('/api/generate',{body_style:'fastback',parameters:{}});console.timeEnd('generate');
-const batch=await req('/api/batches',{model_id:g.model_id,count:2});await py.runPythonAsync('await asyncio.sleep(20)');const done=await req('/api/batches/'+batch.id);if(done.status!=='complete')throw Error(JSON.stringify(done));
-console.log(JSON.stringify({ok:true,sourceVertices:a.model.vertices.length/3,generatedVertices:g.model.vertices.length/3,batch:done.completed}));
+assert.equal(g.cage.points.length,108,'Generated assets also start with a fitted cage');
+const batch=await req('/api/batches',{...g.recipe,model_id:g.model_id,count:2});await py.runPythonAsync('await asyncio.sleep(20)');const done=await req('/api/batches/'+batch.id);if(done.status!=='complete')throw Error(JSON.stringify(done));
+console.log(JSON.stringify({ok:true,sourceVertices:a.model.vertices.length/3,defaultCage:a.cage.points.length,refinedCage:refined.cage.points.length,regrid:refined.regrid,legacyCage:legacy.cage.points.length,generatedVertices:g.model.vertices.length/3,batch:done.completed}));

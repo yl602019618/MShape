@@ -21,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
 from . import __version__
-from .engine import analyze, deform, get_cage
+from .engine import analyze, deform, get_cage, regrid
 from .parameters import schema
 from .generation import generate, generation_schema
 from .importers import import_obj
@@ -40,13 +40,17 @@ app = FastAPI(title="MiShape", version=__version__)
 class Recipe(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     parameters: dict[str, float] = Field(default_factory=dict)
-    controls: list[dict] = Field(default_factory=list, max_length=200)
+    controls: list[dict] = Field(default_factory=list, max_length=1024)
     options: dict = Field(default_factory=lambda: {"symmetry": True, "preserve_wheels": True})
 
 
 class Export(Recipe):
     format: str = "obj"
     part_id: int | None = None
+
+
+class CageChange(Recipe):
+    cage: dict
 
 
 class Calibration(Recipe):
@@ -147,7 +151,12 @@ def get_model(mid):
 
 def result_model(mid, recipe=None):
     model = get_model(mid)
-    return {"model_id": mid, "model": model, "analysis": analyze(model), "cage": get_cage(model), "recipe": recipe}
+    if recipe is None:
+        recipe = {"parameters": {}, "controls": [], "options": {
+            "symmetry": True, "preserve_wheels": True,
+            "cage": {"type": "fitted", "dimensions": [9, 3, 4], "padding_mm": 30}}}
+    cage = get_cage(model, recipe.get("parameters"), recipe.get("controls"), recipe.get("options"))
+    return {"model_id": mid, "model": model, "analysis": analyze(model), "cage": cage, "recipe": recipe}
 
 
 def catalog():
@@ -197,6 +206,18 @@ def preview(mid: str, req: Recipe):
     result = deform(get_model(mid), **req.model_dump())
     info = result.get("metadata", {}).get("mishape", {})
     return {"vertices": result["vertices"], "analysis": info["analysis"] if "analysis" in info else analyze(result), "quality": info.get("quality", {}), "cage": info["cage"] if "cage" in info else get_cage(get_model(mid), **req.model_dump()), "parameters": req.parameters}
+
+
+@app.post("/api/models/{mid}/cage")
+def change_cage(mid: str, req: CageChange):
+    model = get_model(mid)
+    changed = regrid(model, req.parameters, req.controls, req.options, req.cage)
+    recipe = {key: changed[key] for key in ("parameters", "controls", "options")}
+    result = deform(model, **recipe)
+    info = result["metadata"]["mishape"]
+    return {"vertices": result["vertices"], "analysis": info["analysis"], "quality": info["quality"],
+            "cage": info["cage"], "parameters": recipe["parameters"], "recipe": recipe,
+            "regrid": changed["resampling"]}
 
 
 @app.post("/api/models/{mid}/calibrate")

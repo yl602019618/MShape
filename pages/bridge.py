@@ -31,6 +31,7 @@ def dispatch(path,data):
   if len(parts)==3:return app.model_info(mid)
   action=parts[3]
   if action=='deform':return app.preview(mid,app.Recipe(**data))
+  if action=='cage':return app.change_cage(mid,app.CageChange(**data))
   if action=='calibrate':return app.calibrate_model(mid,app.Calibration(**data))
   if action=='export':return app.export_model(mid,app.Export(**data))
  if parts[1]=='batches':

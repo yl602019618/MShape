@@ -24,7 +24,7 @@ import uuid
 import zipfile
 
 
-VERSION = '0.1.0'
+VERSION = '0.2.0'
 NAME = f'MiShape-v{VERSION}'
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / 'mishape'
@@ -204,7 +204,7 @@ def build_lock():
 
 
 def write_release_readme(stage):
-    (stage / 'README.md').write_text('''# MiShape 0.1 — polygon 车辆设计工作台
+    (stage / 'README.md').write_text('''# MiShape 0.2 — polygon 车辆设计工作台
 
 本包包含独立 MiShape 软件、两辆 Porsche 素材、参数化生成器、使用文档及验证记录。旧 AeroShape 仅作为 Python 几何依赖提供，启动器运行 MiShape。
 
